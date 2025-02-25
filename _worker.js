@@ -1,6 +1,6 @@
 // 定义外部变量
 let sitename = "域名监控"; //变量名SITENAME，自定义站点名称，默认为“域名监控”
-let domains = ""; //变量名DOMAINS，填入域名信息json文件直链，必须设置的变量
+let domains = ""; //变量名DOMAINS，填入域名信息json格式，必须设置的变量
 let tgid = ""; //变量名TGID，填入TG机器人ID，不需要提醒则不填
 let tgtoken = ""; //变量名TGTOKEN，填入TG的TOKEN，不需要提醒则不填
 let days = 7; //变量名DAYS，提前几天发送TG提醒，默认为7天，必须为大于0的整数
@@ -36,12 +36,10 @@ export default {
     }
 
     try {
-      const response = await fetch(domains);
-      if (!response.ok) throw new Error('Network response was not ok');
-      
-      domains = await response.json();
+      // 解析 DOMAINS 环境变量中的 JSON 数据
+      domains = JSON.parse(domains);
       if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
-      
+
       const today = new Date().toISOString().split('T')[0]; // 当前日期字符串
 
       for (const domain of domains) {
@@ -50,9 +48,9 @@ export default {
 
         if (daysRemaining > 0 && daysRemaining <= days) {
           const message = `[域名] ${domain.domain} 将在 ${daysRemaining} 天后过期。过期日期：${domain.expirationDate}`;
-          
+
           const lastSentDate = await env.DOMAINS_TG_KV.get(domain.domain); // 以域名为键获取上次发送时间
-          
+
           if (lastSentDate !== today) { // 检查是否已经在今天发送过
             await sendtgMessage(message, tgid, tgtoken); // 发送通知
             await env.DOMAINS_TG_KV.put(domain.domain, today); // 更新发送日期
@@ -65,8 +63,8 @@ export default {
         headers: { 'Content-Type': 'text/html' },
       });
     } catch (error) {
-      console.error("Fetch error:", error);
-      return new Response("无法获取或解析域名的 json 文件", { status: 500 });
+      console.error("Parse error:", error);
+      return new Response("无法解析域名的 json 数据", { status: 500 });
     }
   }
 };
@@ -220,8 +218,8 @@ async function generateHTML(domains, SITENAME) {
       </div>
       <div class="footer">
         <p>
-          Copyright © 2025 Yutian81&nbsp;&nbsp;&nbsp;| 
-          <a href="https://github.com/yutian81/domain-check" target="_blank">GitHub Repository</a>&nbsp;&nbsp;&nbsp;| 
+          Copyright © 2025 Yutian81&nbsp;&nbsp;&nbsp;|
+          <a href="https://github.com/yutian81/domain-check" target="_blank">GitHub Repository</a>&nbsp;&nbsp;&nbsp;|
           <a href="https://blog.811520.xyz/" target="_blank">青云志博客</a>
         </p>
       </div>
