@@ -23,70 +23,7 @@ async function sendtgMessage(message, tgid, tgtoken) {
   }
 }
 
-export default {
-  async fetch(request, env) {
-    // 提取并设置环境变量
-    sitename = env.SITENAME || sitename;
-    domains = env.DOMAINS || domains;
-    tgid = env.TGID || tgid;
-    tgtoken = env.TGTOKEN || tgtoken;
-    days = Number(env.DAYS || days);
-
-    // 检查 SECRET_KV 是否定义
-    if (!env.SECRET_KV || typeof env.SECRET_KV.get !== 'function') {
-      return new Response("SECRET_KV 命名空间未定义或绑定", { status: 500 });
-    }
-
-    // 从Cloudflare KV中获取存储的密码
-    const storedPassword = await env.SECRET_KV.get('password');
-
-    // 从请求头中获取提供的密码
-    const providedPassword = new URL(request.url).searchParams.get('password');
-
-    // 验证密码
-    if (!providedPassword || providedPassword !== storedPassword) {
-      return new Response("Unauthorized access", { status: 401 });
-    }
-
-    if (!domains) {
-      return new Response("DOMAINS 环境变量未设置", { status: 500 });
-    }
-
-    try {
-      // 解析 DOMAINS 环境变量中的 JSON 数据
-      domains = JSON.parse(domains);
-      if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
-
-      const today = new Date().toISOString().split('T')[0]; // 当前日期字符串
-
-      for (const domain of domains) {
-        const expirationDate = new Date(domain.expirationDate);
-        const daysRemaining = Math.ceil((expirationDate - new Date()) / (1000 * 60 * 60 * 24));
-
-        if (daysRemaining > 0 && daysRemaining <= days) {
-          const message = `[域名] ${domain.domain} 将在 ${daysRemaining} 天后过期。过期日期：${domain.expirationDate}`;
-
-          const lastSentDate = await env.DOMAINS_TG_KV.get(domain.domain); // 以域名为键获取上次发送时间
-
-          if (lastSentDate !== today) { // 检查是否已经在今天发送过
-            await sendtgMessage(message, tgid, tgtoken); // 发送通知
-            await env.DOMAINS_TG_KV.put(domain.domain, today); // 更新发送日期
-          }
-        }
-      }
-
-      const htmlContent = await generateHTML(domains, sitename);
-      return new Response(htmlContent, {
-        headers: { 'Content-Type': 'text/html' },
-      });
-    } catch (error) {
-      console.error("Parse error:", error);
-      return new Response("无法解析域名的 json 数据", { status: 500 });
-    }
-  }
-};
-
-async function generateHTML(domains, SITENAME) {
+async function generateHTML(domains, SITENAME, storedPassword) {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
   const bgimgURL = 'https://bing.img.run/1920x1080.php';
   const rows = await Promise.all(domains.map(async info => {
@@ -209,10 +146,29 @@ async function generateHTML(domains, SITENAME) {
         .footer a:hover {
           color: #f1c40f;
         }
+        /* New CSS for password input box */
+        .password-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+        }
+        .password-input {
+          background-color: rgba(255, 255, 255, 0.7);
+          border: none;
+          border-radius: 10px;
+          padding: 10px;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
       </style>
     </head>
     <body>
-      <div class="container">
+      <div class="password-container">
+        <input type="password" class="password-input" placeholder="输入密码">
+      </div>
+      <div class="container" style="display: none;">
         <h1>${SITENAME}</h1>
         <div class="table-container">
           <table>
@@ -233,14 +189,62 @@ async function generateHTML(domains, SITENAME) {
           </table>
         </div>
       </div>
-      <div class="footer">
+      <div class="footer" style="display: none;">
         <p>
           Copyright © 2025 Yutian81&nbsp;&nbsp;&nbsp;|
           <a href="https://github.com/yutian81/domain-check" target="_blank">GitHub Repository</a>&nbsp;&nbsp;&nbsp;|
           <a href="https://blog.811520.xyz/" target="_blank">青云志博客</a>
         </p>
       </div>
+      <script>
+        const passwordInput = document.querySelector('.password-input');
+        passwordInput.addEventListener('keypress', function(event) {
+          if (event.key === 'Enter') {
+            const password = event.target.value;
+            if (password === '${storedPassword}') {
+              document.querySelector('.container').style.display = 'block';
+              document.querySelector('.footer').style.display = 'block';
+              document.querySelector('.password-container').style.display = 'none';
+            } else {
+              alert('密码错误');
+            }
+          }
+        });
+      </script>
     </body>
     </html>
   `;
 }
+
+export default {
+  async fetch(request, env) {
+    // 提取并设置环境变量
+    sitename = env.SITENAME || sitename;
+    domains = env.DOMAINS || domains;
+    tgid = env.TGID || tgid;
+    tgtoken = env.TGTOKEN || tgtoken;
+    days = Number(env.DAYS || days);
+
+    // 检查 SECRET_KV 是否定义
+    if (!env.SECRET_KV || typeof env.SECRET_KV.get !== 'function') {
+      return new Response("SECRET_KV 命名空间未定义或绑定", { status: 500 });
+    }
+
+    // 从Cloudflare KV中获取存储的密码
+    const storedPassword = await env.SECRET_KV.get('password');
+
+    // 解析 DOMAINS 环境变量中的 JSON 数据
+    try {
+      domains = JSON.parse(domains);
+      if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
+    } catch (error) {
+      return new Response("DOMAINS 环境变量中的 JSON 数据格式不正确", { status: 500 });
+    }
+
+    // 直接返回HTML页面，进行密码验证
+    const htmlContent = await generateHTML(domains, sitename, storedPassword);
+    return new Response(htmlContent, {
+      headers: { 'Content-Type': 'text/html' },
+    });
+  }
+};
