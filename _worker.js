@@ -25,11 +25,28 @@ async function sendtgMessage(message, tgid, tgtoken) {
 
 export default {
   async fetch(request, env) {
+    // 提取并设置环境变量
     sitename = env.SITENAME || sitename;
     domains = env.DOMAINS || domains;
     tgid = env.TGID || tgid;
     tgtoken = env.TGTOKEN || tgtoken;
     days = Number(env.DAYS || days);
+
+    // 检查 SECRET_KV 是否定义
+    if (!env.SECRET_KV || typeof env.SECRET_KV.get !== 'function') {
+      return new Response("SECRET_KV 命名空间未定义或绑定", { status: 500 });
+    }
+
+    // 从Cloudflare KV中获取存储的密码
+    const storedPassword = await env.SECRET_KV.get('password');
+
+    // 从请求头中获取提供的密码
+    const providedPassword = new URL(request.url).searchParams.get('password');
+
+    // 验证密码
+    if (!providedPassword || providedPassword !== storedPassword) {
+      return new Response("Unauthorized access", { status: 401 });
+    }
 
     if (!domains) {
       return new Response("DOMAINS 环境变量未设置", { status: 500 });
