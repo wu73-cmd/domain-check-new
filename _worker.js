@@ -178,7 +178,8 @@ async function generateDomainListPage(domains, SITENAME) {
           </div>
         </td>
         <td>
-          <button onclick="deleteDomain('${info.domain}')">删除</button>
+          <button onclick="editDomain('${info.domain}', '${info.registrationDate}', '${info.expirationDate}', '${info.system}', '${info.systemURL}')" class="edit-btn">编辑</button>
+          <button onclick="deleteDomain('${info.domain}')" class="delete-btn">删除</button>
         </td>
       </tr>
     `;
@@ -300,6 +301,86 @@ async function generateDomainListPage(domains, SITENAME) {
         #add-domain-form button:hover {
           background-color: #2980b9;
         }
+         .edit-btn, .delete-btn {
+          padding: 5px 10px;
+          margin: 0 5px;
+          border: none;
+          border-radius: 3px;
+          cursor: pointer;
+        }
+        .edit-btn {
+          background-color: #f39c12;
+          color: white;
+        }
+        .edit-btn:hover {
+          background-color: #e67e22;
+        }
+        .delete-btn {
+          background-color: #e74c3c;
+          color: white;
+        }
+        .delete-btn:hover {
+          background-color: #c0392b;
+        }
+        
+        /* 模态框样式 */
+        .modal {
+          display: none;
+          position: fixed;
+          z-index: 1000;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal-content {
+          background-color: white;
+          margin: 10% auto;
+          padding: 20px;
+          border-radius: 5px;
+          width: 80%;
+          max-width: 500px;
+          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px solid #eee;
+          padding-bottom: 10px;
+          margin-bottom: 15px;
+        }
+        .modal-header h3 {
+          margin: 0;
+        }
+        .close-modal {
+          font-size: 24px;
+          font-weight: bold;
+          cursor: pointer;
+        }
+        .modal-form {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+        .modal-form input {
+          padding: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+        }
+        .modal-form button {
+          padding: 10px;
+          background-color: #3498db;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          margin-top: 10px;
+        }
+        .modal-form button:hover {
+          background-color: #2980b9;
+        }
       </style>
     </head>
     <body>
@@ -333,6 +414,27 @@ async function generateDomainListPage(domains, SITENAME) {
           </table>
         </div>
       </div>
+
+      
+      <!-- 编辑域名的模态框 -->
+      <div id="edit-modal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>编辑域名信息</h3>
+            <span class="close-modal">&times;</span>
+          </div>
+          <form id="edit-domain-form" class="modal-form">
+            <input type="hidden" id="edit-domain-original">
+            <input type="text" id="edit-domain" placeholder="域名" required>
+            <input type="date" id="edit-registrationDate" placeholder="注册日期" required>
+            <input type="date" id="edit-expirationDate" placeholder="过期日期" required>
+            <input type="text" id="edit-system" placeholder="注册商" required>
+            <input type="url" id="edit-systemURL" placeholder="注册商 URL" required>
+            <button type="submit">保存修改</button>
+          </form>
+        </div>
+      </div>
+      
       <div class="footer">
         <p>
           Copyright © 2025 Yutian81&nbsp;&nbsp;&nbsp;|
@@ -375,6 +477,71 @@ async function generateDomainListPage(domains, SITENAME) {
             window.location.reload();
           }
         }
+
+         
+        // 编辑域名相关功能
+        const editModal = document.getElementById('edit-modal');
+        const closeModalBtn = document.querySelector('.close-modal');
+        
+        // 关闭模态框
+        closeModalBtn.addEventListener('click', function() {
+          editModal.style.display = 'none';
+        });
+        
+        // 点击模态框外部关闭
+        window.addEventListener('click', function(event) {
+          if (event.target === editModal) {
+            editModal.style.display = 'none';
+          }
+        });
+        
+        // 打开编辑模态框并填充数据
+        function editDomain(domain, registrationDate, expirationDate, system, systemURL) {
+          document.getElementById('edit-domain-original').value = domain;
+          document.getElementById('edit-domain').value = domain;
+          document.getElementById('edit-registrationDate').value = registrationDate;
+          document.getElementById('edit-expirationDate').value = expirationDate;
+          document.getElementById('edit-system').value = system;
+          document.getElementById('edit-systemURL').value = systemURL;
+          
+          editModal.style.display = 'block';
+        }
+        
+        // 处理编辑表单提交
+        const editForm = document.getElementById('edit-domain-form');
+        editForm.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          
+          const originalDomain = document.getElementById('edit-domain-original').value;
+          const domainInfo = {
+            domain: document.getElementById('edit-domain').value,
+            registrationDate: document.getElementById('edit-registrationDate').value,
+            expirationDate: document.getElementById('edit-expirationDate').value,
+            system: document.getElementById('edit-system').value,
+            systemURL: document.getElementById('edit-systemURL').value,
+            originalDomain: originalDomain // 添加原始域名以便后端识别
+          };
+          
+          try {
+            const response = await fetch('/edit-domain', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(domainInfo)
+            });
+            
+            if (response.ok) {
+              alert('域名信息已更新');
+              // 关闭模态框并刷新页面
+              editModal.style.display = 'none';
+              window.location.reload();
+            } else {
+              const errorData = await response.json();
+              alert('更新失败: ' + (errorData.message || '未知错误'));
+            }
+          } catch (error) {
+            alert('更新请求失败: ' + error.message);
+          }
+        });
       </script>
     </body>
     </html>
@@ -435,6 +602,48 @@ export default {
       } else if (url.pathname.endsWith('/delete-domain')) {
         await deleteDomainFromKV(env, requestBody.domain);
         return new Response('域名信息已删除', { status: 200 });
+      } else if (url.pathname.endsWith('/edit-domain')) {
+        try {
+          // 如果域名发生变化，需要先删除旧域名再添加新域名
+          if (requestBody.originalDomain && requestBody.originalDomain !== requestBody.domain) {
+            await deleteDomainFromKV(env, requestBody.originalDomain);
+            
+            // 创建新的域名对象（不包含originalDomain字段）
+            const newDomainInfo = {
+              domain: requestBody.domain,
+              registrationDate: requestBody.registrationDate,
+              expirationDate: requestBody.expirationDate,
+              system: requestBody.system,
+              systemURL: requestBody.systemURL
+            };
+            
+            await saveDomainToKV(env, newDomainInfo);
+          } else {
+            // 域名没变，直接更新
+            const domainInfo = {
+              domain: requestBody.domain,
+              registrationDate: requestBody.registrationDate,
+              expirationDate: requestBody.expirationDate,
+              system: requestBody.system,
+              systemURL: requestBody.systemURL
+            };
+            
+            await editDomainInKV(env, domainInfo);
+          }
+          
+          return new Response(JSON.stringify({ success: true }), { 
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            message: error.message || '更新域名信息失败'
+          }), { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       }
     }
 
