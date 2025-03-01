@@ -23,6 +23,41 @@ async function sendtgMessage(message, tgid, tgtoken) {
   }
 }
 
+// 保存域名信息
+async function saveDomainToKV(env, domainInfo) {
+  const domainsKV = env.SECRET_KV;
+  const domains = await domainsKV.get('domains') || '[]';
+  const domainsArray = JSON.parse(domains);
+
+  domainsArray.push(domainInfo);
+  await domainsKV.put('domains', JSON.stringify(domainsArray));
+}
+
+// 编辑域名信息
+async function editDomainInKV(env, updatedDomainInfo) {
+  const domainsKV = env.SECRET_KV;
+  const domains = await domainsKV.get('domains') || '[]';
+  const domainsArray = JSON.parse(domains);
+
+  const index = domainsArray.findIndex(domain => domain.domain === updatedDomainInfo.domain);
+  if (index !== -1) {
+    domainsArray[index] = updatedDomainInfo;
+    await domainsKV.put('domains', JSON.stringify(domainsArray));
+  } else {
+    throw new Error('Domain not found');
+  }
+}
+
+// 删除域名信息
+async function deleteDomainFromKV(env, domainName) {
+  const domainsKV = env.SECRET_KV;
+  const domains = await domainsKV.get('domains') || '[]';
+  const domainsArray = JSON.parse(domains);
+
+  const updatedDomainsArray = domainsArray.filter(domain => domain.domain !== domainName);
+  await domainsKV.put('domains', JSON.stringify(updatedDomainsArray));
+}
+
 async function generateHTML(domains, SITENAME, storedPassword) {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
   const bgimgURL = 'https://bing.img.run/1920x1080.php';
@@ -50,6 +85,9 @@ async function generateHTML(domains, SITENAME, storedPassword) {
           <div class="progress-bar">
             <div class="progress" style="width: ${progressPercentage}%;"></div>
           </div>
+        </td>
+        <td>
+          <button onclick="deleteDomain('${info.domain}')">删除</button>
         </td>
       </tr>
     `;
@@ -170,6 +208,14 @@ async function generateHTML(domains, SITENAME, storedPassword) {
       </div>
       <div class="container" style="display: none;">
         <h1>${SITENAME}</h1>
+        <form id="add-domain-form">
+          <input type="text" id="domain" placeholder="域名" required>
+          <input type="date" id="registrationDate" placeholder="注册日期" required>
+          <input type="date" id="expirationDate" placeholder="过期日期" required>
+          <input type="text" id="system" placeholder="注册商" required>
+          <input type="url" id="systemURL" placeholder="注册商 URL" required>
+          <button type="submit">添加域名</button>
+        </form>
         <div class="table-container">
           <table>
             <thead>
@@ -181,6 +227,7 @@ async function generateHTML(domains, SITENAME, storedPassword) {
                 <th>过期时间</th>
                 <th>剩余天数</th>
                 <th>使用进度</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -210,6 +257,37 @@ async function generateHTML(domains, SITENAME, storedPassword) {
             }
           }
         });
+
+        // 处理表单提交
+        const form = document.getElementById('add-domain-form');
+        form.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          const domainInfo = {
+            domain: document.getElementById('domain').value,
+            registrationDate: document.getElementById('registrationDate').value,
+            expirationDate: document.getElementById('expirationDate').value,
+            system: document.getElementById('system').value,
+            systemURL: document.getElementById('systemURL').value
+          };
+          await fetch('/add-domain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(domainInfo)
+          });
+          alert('域名信息已保存');
+        });
+
+        // 删除域名
+        async function deleteDomain(domain) {
+          if (confirm('确认删除该域名信息?')) {
+            await fetch('/delete-domain', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain })
+            });
+            alert('域名信息已删除');
+          }
+        }
       </script>
     </body>
     </html>
@@ -218,9 +296,19 @@ async function generateHTML(domains, SITENAME, storedPassword) {
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'POST') {
+      const requestBody = await request.json();
+      if (request.url.endsWith('/add-domain')) {
+        await saveDomainToKV(env, requestBody);
+        return new Response('域名信息已保存', { status: 200 });
+      } else if (request.url.endsWith('/delete-domain')) {
+        await deleteDomainFromKV(env, requestBody.domain);
+        return new Response('域名信息已删除', { status: 200 });
+      }
+    }
+
     // 提取并设置环境变量
     sitename = env.SITENAME || sitename;
-    domains = env.DOMAINS || domains;
     tgid = env.TGID || tgid;
     tgtoken = env.TGTOKEN || tgtoken;
     days = Number(env.DAYS || days);
@@ -233,12 +321,13 @@ export default {
     // 从Cloudflare KV中获取存储的密码
     const storedPassword = await env.SECRET_KV.get('password');
 
-    // 解析 DOMAINS 环境变量中的 JSON 数据
+    // 从Cloudflare KV中获取最新的 domains 数据
     try {
-      domains = JSON.parse(domains);
+      const domainsKV = await env.SECRET_KV.get('domains');
+      domains = domainsKV ? JSON.parse(domainsKV) : [];
       if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
     } catch (error) {
-      return new Response("DOMAINS 环境变量中的 JSON 数据格式不正确", { status: 500 });
+      return new Response("从Cloudflare KV中获取的 JSON 数据格式不正确", { status: 500 });
     }
 
     // 直接返回HTML页面，进行密码验证
