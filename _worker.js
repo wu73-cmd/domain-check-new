@@ -43,6 +43,21 @@ async function deleteDomainFromKV(env, domainName) {
   await domainsKV.put('domains', JSON.stringify(updatedDomainsArray));
 }
 
+// 编辑域名信息
+async function editDomainInKV(env, updatedDomainInfo) {
+  const domainsKV = env.SECRET_KV;
+  const domains = await domainsKV.get('domains') || '[]';
+  const domainsArray = JSON.parse(domains);
+
+  const index = domainsArray.findIndex(domain => domain.domain === updatedDomainInfo.domain);
+  if (index !== -1) {
+    domainsArray[index] = updatedDomainInfo;
+    await domainsKV.put('domains', JSON.stringify(domainsArray));
+  } else {
+    throw new Error('Domain not found');
+  }
+}
+
 // 生成密码验证页面
 async function generatePasswordPage() {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
