@@ -5,6 +5,7 @@ let tgid = ""; //变量名TGID，填入TG机器人ID，不需要提醒则不填
 let tgtoken = ""; //变量名TGTOKEN，填入TG的TOKEN，不需要提醒则不填
 let days = 7; //变量名DAYS，提前几天发送TG提醒，默认为7天，必须为大于0的整数
 
+//发送消息方法，默认只支持TG
 async function sendtgMessage(message, tgid, tgtoken) {
   if (!tgid || !tgtoken) return;
   const url = `https://api.telegram.org/bot${tgtoken}/sendMessage`;
@@ -20,6 +21,57 @@ async function sendtgMessage(message, tgid, tgtoken) {
     });
   } catch (error) {
     console.error('Telegram 消息推送失败:', error);
+  }
+}
+
+//定时检查域名到期时间并发送消息
+async function handleScheduled(event,env) {
+  
+  tgid = env.TGID || tgid;
+  tgtoken = env.TGTOKEN || tgtoken;
+  days = Number(env.DAYS || days);
+
+  try {
+    const domainsKV = await env.SECRET_KV.get('domains');
+    domains = domainsKV ? JSON.parse(domainsKV) : [];
+    if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
+  } catch (error) {
+    return  await sendtgMessage("从Cloudflare KV中获取的 JSON 数据格式不正确", tgid, tgtoken); 
+  }
+
+  try {
+       
+    const today = new Date().toISOString().split('T')[0]; // 当前日期字符串
+
+    for (const domain of domains) {
+      const expirationDate = new Date(domain.expirationDate);
+      // @ts-ignore
+      const daysRemaining = Math.ceil((expirationDate - new Date()) / (1000 * 60 * 60 * 24));
+
+      if (daysRemaining > 0 && daysRemaining <= days) {
+        const escapeMD = (str) => str.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
+        const message = `
+        【域名过期提醒】
+        
+        ⚠️ 域名:  ${escapeMD(domain.domain)}
+        ⏰ 剩余时间:  ${daysRemaining}天（到期时间：${domain.expirationDate}）
+        🏷️ 注册服务商:  ${escapeMD(domain.system)}
+        🔗 注册地址:  ${domain.systemURL}
+          `;
+          
+
+        const lastSentDate = await env.DOMAINS_TG_KV.get(domain.domain); // 以域名为键获取上次发送时间
+        
+        if (lastSentDate !== today) { // 检查是否已经在今天发送过
+          await sendtgMessage(message, tgid, tgtoken); // 发送通知
+          await env.DOMAINS_TG_KV.put(domain.domain, today); // 更新发送日期
+        }
+      }
+    }
+
+    console.log("域名检查完成");
+  } catch (error) {
+    console.error("Fetch error:", error);
   }
 }
 
@@ -708,5 +760,11 @@ export default {
         headers: { 'Content-Type': 'text/html' },
       });
     }
-  }
+  },
+
+  //定时任务，监控域名到期实际发送消息
+  async scheduled(event, env, ctx) {
+        ctx.waitUntil(handleScheduled(event,env));
+      }
+
 };
