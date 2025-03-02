@@ -5,6 +5,11 @@
 
 **原版DEMO**：<https://domains.yutian81.top>  
 
+**当前版本效果图**
+
+![Snipaste_2025-03-02_11-11-31](https://github.com/user-attachments/assets/0fb1e39e-53dc-43ae-aeac-1ebda2450c89)
+
+
 ## 2025-03-01 更新：修复了密码检验逻辑，重构了页面加载顺序，增加了域名编辑和删除功能
 - 上一版密码会提前加载到源代码中，存在安全隐患，已重构代码
 - 之前想实现的编辑功能，也重新实现
@@ -25,15 +30,15 @@
 
    **创建workers 项目**
    
-    在cf中创建一个workers，项目名看你个人习惯定义，复制_worker.js中的代码到workers中，点击保存并部署。
+  - 在cf中创建一个workers，项目名看你个人习惯定义，复制_worker.js中的代码到workers中，点击保存并部署。
     
 ![sp20250301_140227_057](https://github.com/user-attachments/assets/d67bf4ba-3419-4318-8754-aefcfeb42bb0)
 
 
    **创建KV 空间**
    
-    回到cf账号首页，在cf的左侧菜单中-->存储和数据库-->KV -->创建一个KV命令空间：名称SECRET_KV
-    点开SECRET_KV，在KV对中，新增两对数据，key（密钥）名password，value（值）为你想要设置的密码。
+   - 回到cf账号首页，在cf的左侧菜单中-->存储和数据库-->KV -->创建两个KV命令空间：名称SECRET_KV 和 DOMAINS_TG_KV
+   - 点开SECRET_KV，在KV对中，新增两对数据，key（密钥）名password，value（值）为你想要设置的密码。
     
 ![sp20250301_140349_095](https://github.com/user-attachments/assets/a96b1cc9-da0f-4ef8-a81b-8326f33b43a2)
     
@@ -48,12 +53,12 @@
 
    **绑定KV 空间**
    
-   在第一步创建的项目里--> 设置，绑定菜单，添加 kv 空间，变量名为`SECRET_KV`（不能修改），绑定上一步中新建的 kv 空间（SECRET_KV）
+  - 在第一步创建的项目里--> 设置，绑定菜单，添加 kv 空间，变量名为`SECRET_KV` 和 DOMAINS_TG_KV（两个变量名不能修改），绑定上一步中新建的 kv 空间（SECRET_KV和DOMAINS_TG_KV）
    ![image](https://github.com/user-attachments/assets/bfad0d9c-e636-4dd0-804e-e828a3f6fc53)
 
   **创建变量设置**
 
-   还是在设置菜单，点击变量和机密，添加以下变量名：
+  - 还是在设置菜单，点击变量和机密，添加以下变量名：
    
 | 变量名 | 填写示例 | 说明 | 是否必填 | 
 | ------ | ------- | ------ | ------ |
