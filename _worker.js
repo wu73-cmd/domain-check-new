@@ -113,7 +113,7 @@ async function editDomainInKV(env, updatedDomainInfo) {
 // 生成密码验证页面
 async function generatePasswordPage() {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
-  const bgimgURL = 'https://bing.img.run/1920x1080.php';
+  const bgimgURL = 'https://www.helloimg.com/i/2025/04/06/67f1ee17c1a25.jpg';
   
   return `
     <!DOCTYPE html>
@@ -130,6 +130,8 @@ async function generatePasswordPage() {
           margin: 0;
           padding: 0;
           background-image: url('${bgimgURL}');
+          background-repeat: no-repeat;
+          background-size: 100% 100%;
           color: #333;
           display: flex;
           flex-direction: column;
@@ -218,7 +220,7 @@ async function generatePasswordPage() {
 // 生成域名列表页面
 async function generateDomainListPage(domains, SITENAME) {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
-  const bgimgURL = 'https://bing.img.run/1920x1080.php';
+  const bgimgURL = 'https://www.helloimg.com/i/2025/04/06/67f1ee17c1a25.jpg';
   const rows = await Promise.all(domains.map(async info => {
     const registrationDate = new Date(info.registrationDate);
     const expirationDate = new Date(info.expirationDate);
@@ -267,6 +269,8 @@ async function generateDomainListPage(domains, SITENAME) {
           margin: 0;
           padding: 0;
           background-image: url('${bgimgURL}');
+          background-repeat: no-repeat;
+          background-size: 100% 100%;
           color: #333;
           display: flex;
           flex-direction: column;
