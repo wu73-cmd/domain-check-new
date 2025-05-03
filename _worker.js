@@ -5,6 +5,41 @@ let tgid = ""; //变量名TGID，填入TG机器人ID，不需要提醒则不填
 let tgtoken = ""; //变量名TGTOKEN，填入TG的TOKEN，不需要提醒则不填
 let days = 7; //变量名DAYS，提前几天发送TG提醒，默认为7天，必须为大于0的整数
 
+// 获取Bing每日图片的函数
+async function handleBingImagesRequest() {
+    const cache = caches.default;
+    const cacheKey = new Request('https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5');
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) {
+      console.log('Returning cached response');
+      return cachedResponse;
+    }
+    try {
+      const res = await fetch(cacheKey);
+      if (!res.ok) {
+        console.error(`Bing API 请求失败，状态码：${res.status}`);
+        return new Response('请求 Bing API 失败', { status: res.status });
+      }
+      const bingData = await res.json();
+      const images = bingData.images.map(image => ({ url: `https://cn.bing.com${image.url}` }));
+      const returnData = { status: true, message: "操作成功", data: images };
+      const response = new Response(JSON.stringify(returnData), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=21600',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+      await cache.put(cacheKey, response.clone());
+      console.log('响应数据已缓存');
+      return response;
+    } catch (error) {
+      console.error('请求 Bing API 过程中发生错误:', error);
+      return new Response('请求 Bing API 失败', { status: 500 });
+    }
+  }  
+
 //发送消息方法，默认只支持TG
 async function sendtgMessage(message, tgid, tgtoken) {
   if (!tgid || !tgtoken) return;
@@ -57,6 +92,7 @@ async function handleScheduled(event,env) {
         ⏰ 剩余时间:  ${daysRemaining}天（到期时间：${domain.expirationDate}）
         🏷️ 注册服务商:  ${escapeMD(domain.system)}
         🔗 注册地址:  ${domain.systemURL}
+        📝 备注:  ${domain.remark || '无'}
           `;
           
 
@@ -100,10 +136,34 @@ async function editDomainInKV(env, updatedDomainInfo) {
   const domainsKV = env.SECRET_KV;
   const domains = await domainsKV.get('domains') || '[]';
   const domainsArray = JSON.parse(domains);
-
-  const index = domainsArray.findIndex(domain => domain.domain === updatedDomainInfo.domain);
+  
+  const lowerCaseDomain = updatedDomainInfo.domain.toLowerCase();
+  const index = domainsArray.findIndex(domain => domain.domain.toLowerCase() === lowerCaseDomain);
   if (index !== -1) {
-    domainsArray[index] = updatedDomainInfo;
+    // 如果域名发生变化，需要先删除旧域名再添加新域名
+    if (updatedDomainInfo.originalDomain !== updatedDomainInfo.domain) {
+      domainsArray.splice(index, 1);
+      const newDomainInfo = {
+        domain: updatedDomainInfo.domain,
+        registrationDate: updatedDomainInfo.registrationDate,
+        expirationDate: updatedDomainInfo.expirationDate,
+        system: updatedDomainInfo.system,
+        systemURL: updatedDomainInfo.systemURL,
+        remark: updatedDomainInfo.remark,
+        sortOrder: updatedDomainInfo.sortOrder
+      };
+      domainsArray.push(newDomainInfo);
+    } else {
+      domainsArray[index] = {
+        domain: updatedDomainInfo.domain,
+        registrationDate: updatedDomainInfo.registrationDate,
+        expirationDate: updatedDomainInfo.expirationDate,
+        system: updatedDomainInfo.system,
+        systemURL: updatedDomainInfo.systemURL,
+        remark: updatedDomainInfo.remark,
+        sortOrder: updatedDomainInfo.sortOrder
+      };
+    }
     await domainsKV.put('domains', JSON.stringify(domainsArray));
   } else {
     throw new Error('Domain not found');
@@ -113,7 +173,9 @@ async function editDomainInKV(env, updatedDomainInfo) {
 // 生成密码验证页面
 async function generatePasswordPage() {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
-  const bgimgURL = 'https://www.helloimg.com/i/2025/04/06/67f1ee17c1a25.jpg';
+  const bingResponse = await handleBingImagesRequest();
+  const bingData = await bingResponse.json();
+  const bgimgURL = bingData.data[0].url;
   
   return `
     <!DOCTYPE html>
@@ -220,7 +282,9 @@ async function generatePasswordPage() {
 // 生成域名列表页面
 async function generateDomainListPage(domains, SITENAME) {
   const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
-  const bgimgURL = 'https://www.helloimg.com/i/2025/04/06/67f1ee17c1a25.jpg';
+  const bingResponse = await handleBingImagesRequest();
+  const bingData = await bingResponse.json();
+  const bgimgURL = bingData.data[0].url;
   const rows = await Promise.all(domains.map(async info => {
     const registrationDate = new Date(info.registrationDate);
     const expirationDate = new Date(info.expirationDate);
@@ -234,7 +298,7 @@ async function generateDomainListPage(domains, SITENAME) {
     const statusText = isExpired ? '已过期' : '正常';
 
     return `
-      <tr>
+    <tr data-domain="${info.domain}" draggable="true">
         <td><span class="status-dot" style="background-color: ${statusColor};" title="${statusText}"></span></td>
         <td>${info.domain}</td>
         <td><a href="${info.systemURL}" target="_blank">${info.system}</a></td>
@@ -246,8 +310,9 @@ async function generateDomainListPage(domains, SITENAME) {
             <div class="progress" style="width: ${progressPercentage}%;"></div>
           </div>
         </td>
+        <td>${info.remark || '无'}</td>
         <td>
-          <button onclick="editDomain('${info.domain}', '${info.registrationDate}', '${info.expirationDate}', '${info.system}', '${info.systemURL}')" class="edit-btn">编辑</button>
+          <button onclick="editDomain('${info.domain}', '${info.registrationDate}', '${info.expirationDate}', '${info.system}', '${info.systemURL}', '${info.remark}', ${info.sortOrder})" class="edit-btn">编辑</button>
           <button onclick="deleteDomain('${info.domain}')" class="delete-btn">删除</button>
         </td>
       </tr>
@@ -463,19 +528,23 @@ async function generateDomainListPage(domains, SITENAME) {
           <input type="date" id="expirationDate" placeholder="过期日期" required>
           <input type="text" id="system" placeholder="注册商" required>
           <input type="url" id="systemURL" placeholder="注册商 URL" required>
+          <input type="number" id="sortOrder" placeholder="排序值" value="0">
+          <input type="text" id="remark" placeholder="备注">
           <button type="submit">添加域名</button>
         </form>
         <div class="table-container">
+          <table id="domain-table">
           <table>
             <thead>
               <tr>
-                <th>状态</th>
-                <th>域名</th>
-                <th>域名注册商</th>
-                <th>注册时间</th>
-                <th>过期时间</th>
-                <th>剩余天数</th>
-                <th>使用进度</th>
+                <th onclick="sortTable(0)">状态</th>
+                <th onclick="sortTable(1)">域名</th>
+                <th onclick="sortTable(2)">域名注册商</th>
+                <th onclick="sortTable(3)">注册时间</th>
+                <th onclick="sortTable(4)">过期时间</th>
+                <th onclick="sortTable(5)">剩余天数</th>
+                <th onclick="sortTable(6)">使用进度</th>
+                <th>备注</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -501,6 +570,8 @@ async function generateDomainListPage(domains, SITENAME) {
             <input type="date" id="edit-expirationDate" placeholder="过期日期" required>
             <input type="text" id="edit-system" placeholder="注册商" required>
             <input type="url" id="edit-systemURL" placeholder="注册商 URL" required>
+            <input type="number" id="edit-sortOrder" placeholder="排序值">
+            <input type="text" id="edit-remark" placeholder="备注">
             <button type="submit">保存修改</button>
           </form>
         </div>
@@ -523,7 +594,8 @@ async function generateDomainListPage(domains, SITENAME) {
             registrationDate: document.getElementById('registrationDate').value,
             expirationDate: document.getElementById('expirationDate').value,
             system: document.getElementById('system').value,
-            systemURL: document.getElementById('systemURL').value
+            systemURL: document.getElementById('systemURL').value,
+            sortOrder: parseInt(document.getElementById('sortOrder').value)
           };
           await fetch('/add-domain', {
             method: 'POST',
@@ -567,13 +639,15 @@ async function generateDomainListPage(domains, SITENAME) {
         });
         
         // 打开编辑模态框并填充数据
-        function editDomain(domain, registrationDate, expirationDate, system, systemURL) {
+        function editDomain(domain, registrationDate, expirationDate, system, systemURL, remark, sortOrder) {
           document.getElementById('edit-domain-original').value = domain;
           document.getElementById('edit-domain').value = domain;
           document.getElementById('edit-registrationDate').value = registrationDate;
           document.getElementById('edit-expirationDate').value = expirationDate;
           document.getElementById('edit-system').value = system;
           document.getElementById('edit-systemURL').value = systemURL;
+          document.getElementById('edit-remark').value = remark;
+          document.getElementById('edit-sortOrder').value = sortOrder;
           
           editModal.style.display = 'block';
         }
@@ -590,6 +664,9 @@ async function generateDomainListPage(domains, SITENAME) {
             expirationDate: document.getElementById('edit-expirationDate').value,
             system: document.getElementById('edit-system').value,
             systemURL: document.getElementById('edit-systemURL').value,
+            remark: document.getElementById('edit-remark').value,
+            originalDomain: originalDomain,
+            sortOrder: parseInt(document.getElementById('edit-sortOrder').value),
             originalDomain: originalDomain // 添加原始域名以便后端识别
           };
           
@@ -613,6 +690,56 @@ async function generateDomainListPage(domains, SITENAME) {
             alert('更新请求失败: ' + error.message);
           }
         });
+        
+          // 表格排序函数
+        function sortTable(n) {
+          var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+          table = document.getElementById("domain-table");
+          switching = true;
+          // 设置排序方向为升序
+          dir = "asc"; 
+          /* 循环直到没有进行交换为止 */
+          while (switching) {
+            // 开始时假设没有交换
+            switching = false;
+            rows = table.rows;
+            /* 循环遍历除表头外的每一行 */
+            for (i = 1; i < (rows.length - 1); i++) {
+              // 开始时假设不交换
+              shouldSwitch = false;
+              /* 获取当前行和下一行要比较的单元格 */
+              x = rows[i].getElementsByTagName("TD")[n];
+              y = rows[i + 1].getElementsByTagName("TD")[n];
+              /* 根据排序方向决定比较逻辑 */
+              if (dir == "asc") {
+                if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                  // 如果当前单元格的值大于下一个单元格的值，则需要交换
+                  shouldSwitch = true;
+                  break;
+                }
+              } else if (dir == "desc") {
+                if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                  // 如果当前单元格的值小于下一个单元格的值，则需要交换
+                  shouldSwitch = true;
+                  break;
+                }
+              }
+            }
+            if (shouldSwitch) {
+              /* 如果需要交换，则交换两行并标记为已交换 */
+              rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+              switching = true;
+              // 增加交换计数
+              switchcount ++; 
+            } else {
+              /* 如果没有交换且排序方向为升序，则切换到降序并再次尝试排序 */
+              if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+              }
+            }
+          }
+        }
       </script>
     </body>
     </html>
@@ -623,7 +750,34 @@ async function generateDomainListPage(domains, SITENAME) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+     
+   // 检查 URL 中是否包含 password 参数
+        const passwordFromURL = url.searchParams.get('password');
+        if (passwordFromURL) {
+          try {
+            const storedPassword = await env.SECRET_KV.get('password');
     
+            if (passwordFromURL === storedPassword) {
+              // 生成一个简单的会话令牌（在生产环境中应使用更安全的方法）
+              const token = btoa(Date.now() + ':' + Math.random());
+    
+              // 存储令牌（有效期10分钟）
+              await env.SECRET_KV.put('auth_token:' + token, 'valid', { expirationTtl: 600 });
+    
+              // 重定向到域名列表页面
+              return new Response(null, {
+                status: 302,
+                headers: {
+                  Location: `/domains?token=${encodeURIComponent(token)}`
+                }
+              });
+            } else {
+              return new Response("密码错误", { status: 401 });
+            }
+          } catch (error) {
+            return new Response("验证失败", { status: 500 });
+          }
+        }  
     // 处理密码验证请求
     if (request.method === 'POST' && url.pathname === '/verify-password') {
       try {
@@ -685,7 +839,9 @@ export default {
               registrationDate: requestBody.registrationDate,
               expirationDate: requestBody.expirationDate,
               system: requestBody.system,
-              systemURL: requestBody.systemURL
+              systemURL: requestBody.systemURL,
+              remark: requestBody.remark,
+              sortOrder: requestBody.sortOrder
             };
             
             await saveDomainToKV(env, newDomainInfo);
@@ -696,7 +852,9 @@ export default {
               registrationDate: requestBody.registrationDate,
               expirationDate: requestBody.expirationDate,
               system: requestBody.system,
-              systemURL: requestBody.systemURL
+              systemURL: requestBody.systemURL,
+              remark: requestBody.remark,
+              sortOrder: requestBody.sortOrder
             };
             
             await editDomainInKV(env, domainInfo);
@@ -715,6 +873,20 @@ export default {
             headers: { 'Content-Type': 'application/json' }
           });
         }
+      } else if (url.pathname.endsWith('/save-sort-order')) {
+        const domainsKV = env.SECRET_KV;
+        const domains = await domainsKV.get('domains') || '[]';
+        const domainsArray = JSON.parse(domains);
+
+        requestBody.forEach(({ domain, sortOrder }) => {
+          const index = domainsArray.findIndex(d => d.domain === domain);
+          if (index !== -1) {
+            domainsArray[index].sortOrder = sortOrder;
+          }
+        });
+
+        await domainsKV.put('domains', JSON.stringify(domainsArray));
+        return new Response('排序顺序已保存', { status: 200 });
       }
     }
 
@@ -748,6 +920,7 @@ export default {
         const domainsKV = await env.SECRET_KV.get('domains');
         domains = domainsKV ? JSON.parse(domainsKV) : [];
         if (!Array.isArray(domains)) throw new Error('JSON 数据格式不正确');
+        domains.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       } catch (error) {
         return new Response("从Cloudflare KV中获取的 JSON 数据格式不正确", { status: 500 });
       }
