@@ -172,7 +172,7 @@ async function editDomainInKV(env, updatedDomainInfo) {
 
 // 生成密码验证页面
 async function generatePasswordPage() {
-  const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
+  const siteIcon = 'https://file.834000.xyz/1746445136445.ico';
   const bingResponse = await handleBingImagesRequest();
   const bingData = await bingResponse.json();
   const bgimgURL = bingData.data[0].url;
@@ -281,7 +281,7 @@ async function generatePasswordPage() {
 
 // 生成域名列表页面
 async function generateDomainListPage(domains, SITENAME) {
-  const siteIcon = 'https://pan.811520.xyz/icon/domain.png';
+  const siteIcon = 'https://file.834000.xyz/1746445136445.ico';
   const bingResponse = await handleBingImagesRequest();
   const bingData = await bingResponse.json();
   const bgimgURL = bingData.data[0].url;
@@ -579,9 +579,7 @@ async function generateDomainListPage(domains, SITENAME) {
       
       <div class="footer">
         <p>
-          Copyright © 2025 Yutian81&nbsp;&nbsp;&nbsp;|
-          <a href="https://github.com/yutian81/domain-check" target="_blank">GitHub Repository</a>&nbsp;&nbsp;&nbsp;|
-          <a href="https://blog.811520.xyz/" target="_blank">青云志博客</a>
+          |&nbsp; 冲动时做出的选择是无法挽回的 &nbsp;|
         </p>
       </div>
       <script>
