@@ -1,7 +1,7 @@
 # domain-check-new
 这是一个简洁高效的域名可视化展示面板，基于Cloudflare Workers构建。它提供了一个直观的界面，让用户能够一目了然地查看他们域名的状态、注册商、注册日期、过期日期和使用进度，并可在到期前通过TG机器人向用户推送通知。
 
-## 项目基于yutian81的项目<https://github.com/yutian81/domain-check>进行完善，增加了密码登录、编辑删除功能
+## 项目基于[yutian81的项目](https://github.com/yutian81/domain-check)进行完善，增加了密码登录、编辑删除功能
 
 **原版DEMO**：<https://domains.yutian81.top>  
 
@@ -92,6 +92,18 @@
   { "domain": "hello.xyz", "registrationDate": "2024-07-17", "expirationDate": "2025-07-16", "system": "SpaceShip", "systemURL": "https://www.spaceship.com/zh" }
 ]
 ```
+
+## 技术和服务支持
+本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助。
+![34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b](https://github.com/user-attachments/assets/9dac04bb-f29e-4b27-afb2-17902059ed9f)
+
+[亚洲最佳CDN、边缘和安全解决方案 - Tencent EdgeOne](https://edgeone.ai/zh?from=github)
+
+## 赞助
+本项目开发环境存储由[NETJETT](https://netjett.com/)赞助。
+![NETJETT (自定义)](https://github.com/user-attachments/assets/23075324-62c4-4ac4-92ad-f606dc77f0cf)
+
+
 
 ## 致谢
 [ypq123456789](https://github.com/ypq123456789/domainkeeper)
